@@ -1,0 +1,9 @@
+{
+    "": "whois.iana.org",
+    "_": {
+        "ip": {
+            "host": "whois.arin.net",
+            "query": "n + $addr\r\n"
+        }
+    }
+}
