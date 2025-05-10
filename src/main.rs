@@ -12,6 +12,17 @@ struct CacheEntry {
 
 const TTL: u32 = 24 * 60 * 60;
 const TTL_DURATION: Duration = Duration::from_secs(TTL as u64);
+static IP_HEADERS: &[&str] = &[
+    "x-real-ip",
+    "x-forwarded-for",
+    "cf-connecting-ip",
+    "fastly-client-ip",
+    "true-client-ip",
+    "x-client-ip",
+    "x-cluster-client-ip",
+    "forwarded-for",
+    "forwarded",
+];
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -20,9 +31,13 @@ async fn main() -> std::io::Result<()> {
         .time_to_live(TTL_DURATION)
         .build());
 
+    let servers = include_str!("../resources/whois-servers.json");
+    let whois = WhoIs::from_string(servers).expect("Error reading servers from json.");
+
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(cache.clone()))
+            .app_data(web::Data::new(whois.clone()))
             .service(index)
     })
         .bind(("0.0.0.0", 8080))?
@@ -43,51 +58,45 @@ fn get_first_header(headers_map: &HeaderMap, header_names: &[&str]) -> Option<St
 }
 
 #[get("/")]
-async fn index(req: HttpRequest, cache: web::Data<Arc<Cache<String, CacheEntry>>>) -> impl Responder {
-    let ip = get_first_header(req.headers(), &[
-        "x-real-ip",
-        "x-forwarded-for",
-        "cf-connecting-ip",
-        "fastly-client-ip",
-        "true-client-ip",
-        "x-client-ip",
-        "x-cluster-client-ip",
-        "forwarded-for",
-        "forwarded",
-    ])
-    .or_else(|| req.connection_info().realip_remote_addr().map(|s| s.to_owned()));
+async fn index(req: HttpRequest, cache: web::Data<Arc<Cache<String, CacheEntry>>>, whois: web::Data<WhoIs>) -> impl Responder {
+    let ip = get_first_header(req.headers(), IP_HEADERS)
+        .or_else(|| req.connection_info().realip_remote_addr().map(|s| s.to_owned()));
 
     let ip = match ip {
-        Some(ip) => ip,
+        Some(ip2) => ip2,
         None => return HttpResponse::BadRequest().body("Could not determine client IP"),
     };
 
     let cached_data = cache.get_with(ip.clone(), async move {
-        let now = SystemTime::now();
-        let expires = HttpDate::from(now + TTL_DURATION);
+        let expires = HttpDate::from(SystemTime::now() + TTL_DURATION);
+        let options = match WhoIsLookupOptions::from_string(ip) {
+            Ok(opts) => opts,
+            Err(err) => {
+                eprintln!("Lookup options failed. Reason: {}", err);
 
-        let servers = include_str!("../resources/whois-servers.json");
-        let whois = match WhoIs::from_string(servers) {
-            Ok(w) => w,
-            Err(_) => return CacheEntry {
-                value: "Error reading servers from json.".to_string(),
-                expires,
-                status: StatusCode::INTERNAL_SERVER_ERROR,
-            },
+                return CacheEntry {
+                    value: format!("Lookup options failed. Reason: {}", err),
+                    expires,
+                    status: StatusCode::BAD_REQUEST,
+                };
+            }
         };
-        let options = WhoIsLookupOptions::from_string(ip).unwrap();
         
         // WHOIS lookup is async, so we can just await it
         match whois.lookup_async(options).await {
-            Ok(response) => CacheEntry {
-                value: response,
-                expires: expires,
+            Ok(value) => CacheEntry {
+                value,
+                expires,
                 status: StatusCode::OK,
             },
-            Err(_err) => CacheEntry {
-                value: "WHOIS lookup failed.".to_string(),
-                expires: expires,
-                status: StatusCode::BAD_REQUEST,
+            Err(err) => {
+                eprintln!("WHOIS lookup failed. Reason: {}", err);
+
+                return CacheEntry {
+                    value: format!("WHOIS lookup failed. Reason: {}", err),
+                    expires,
+                    status: StatusCode::BAD_REQUEST,
+                };
             },
         }
     }).await;
