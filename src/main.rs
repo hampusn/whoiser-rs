@@ -10,6 +10,24 @@ struct CacheEntry {
     status: StatusCode,
 }
 
+impl CacheEntry {
+    fn ok(value: String, expires: HttpDate) -> Self {
+        Self {
+            value,
+            expires,
+            status: StatusCode::OK,
+        }
+    }
+
+    fn bad_request(msg: String, expires: HttpDate) -> Self {
+        Self {
+            value: msg,
+            expires,
+            status: StatusCode::BAD_REQUEST,
+        }
+    }
+}
+
 const TTL: u32 = 24 * 60 * 60;
 const TTL_DURATION: Duration = Duration::from_secs(TTL as u64);
 static IP_HEADERS: &[&str] = &[
@@ -74,29 +92,17 @@ async fn index(req: HttpRequest, cache: web::Data<Arc<Cache<String, CacheEntry>>
             Err(err) => {
                 eprintln!("Lookup options failed. Reason: {}", err);
 
-                return CacheEntry {
-                    value: format!("Lookup options failed. Reason: {}", err),
-                    expires,
-                    status: StatusCode::BAD_REQUEST,
-                };
+                return CacheEntry::bad_request(format!("Lookup options failed. Reason: {}", err), expires);
             }
         };
         
         // WHOIS lookup is async, so we can just await it
         match whois.lookup_async(options).await {
-            Ok(value) => CacheEntry {
-                value,
-                expires,
-                status: StatusCode::OK,
-            },
+            Ok(value) => CacheEntry::ok(value, expires),
             Err(err) => {
                 eprintln!("WHOIS lookup failed. Reason: {}", err);
 
-                return CacheEntry {
-                    value: format!("WHOIS lookup failed. Reason: {}", err),
-                    expires,
-                    status: StatusCode::BAD_REQUEST,
-                };
+                return CacheEntry::bad_request(format!("WHOIS lookup failed. Reason: {}", err), expires);
             },
         }
     }).await;
