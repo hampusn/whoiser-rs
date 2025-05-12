@@ -1,5 +1,5 @@
 use actix_web::{get, http::header::{self, CacheDirective, HttpDate}, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
-use rust_whoiser::{cache::entry::CacheEntry, headers::{IP_HEADERS, get_first_header}};
+use whoiser::{cache::entry::CacheEntry, headers::{IP_HEADERS, get_first_header}};
 use whois_rust::{WhoIs, WhoIsLookupOptions};
 use moka::future::Cache;
 use std::{sync::Arc, time::{Duration, SystemTime}};
