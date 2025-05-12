@@ -1,32 +1,8 @@
-use actix_web::{get, http::{header::{self, CacheDirective, HeaderMap, HttpDate}, StatusCode}, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use actix_web::{get, http::header::{self, CacheDirective, HeaderMap, HttpDate}, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use rust_whoiser::cache::entry::CacheEntry;
 use whois_rust::{WhoIs, WhoIsLookupOptions};
 use moka::future::Cache;
 use std::{sync::Arc, time::{Duration, SystemTime}};
-
-#[derive(Clone)]
-struct CacheEntry {
-    value: String,
-    expires: HttpDate,
-    status: StatusCode,
-}
-
-impl CacheEntry {
-    fn ok(value: String, expires: HttpDate) -> Self {
-        Self {
-            value,
-            expires,
-            status: StatusCode::OK,
-        }
-    }
-
-    fn bad_request(msg: String, expires: HttpDate) -> Self {
-        Self {
-            value: msg,
-            expires,
-            status: StatusCode::BAD_REQUEST,
-        }
-    }
-}
 
 const TTL: u32 = 24 * 60 * 60;
 const TTL_DURATION: Duration = Duration::from_secs(TTL as u64);
