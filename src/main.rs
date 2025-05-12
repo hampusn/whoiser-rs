@@ -1,22 +1,11 @@
-use actix_web::{get, http::header::{self, CacheDirective, HeaderMap, HttpDate}, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
-use rust_whoiser::cache::entry::CacheEntry;
+use actix_web::{get, http::header::{self, CacheDirective, HttpDate}, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use rust_whoiser::{cache::entry::CacheEntry, headers::{IP_HEADERS, get_first_header}};
 use whois_rust::{WhoIs, WhoIsLookupOptions};
 use moka::future::Cache;
 use std::{sync::Arc, time::{Duration, SystemTime}};
 
 const TTL: u32 = 24 * 60 * 60;
 const TTL_DURATION: Duration = Duration::from_secs(TTL as u64);
-static IP_HEADERS: &[&str] = &[
-    "x-real-ip",
-    "x-forwarded-for",
-    "cf-connecting-ip",
-    "fastly-client-ip",
-    "true-client-ip",
-    "x-client-ip",
-    "x-cluster-client-ip",
-    "forwarded-for",
-    "forwarded",
-];
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -37,18 +26,6 @@ async fn main() -> std::io::Result<()> {
         .bind(("0.0.0.0", 8080))?
         .run()
         .await
-}
-
-fn get_first_header(headers_map: &HeaderMap, header_names: &[&str]) -> Option<String> {
-    for &name in header_names {
-        if let Some(val) = headers_map.get(name) {
-            if let Ok(s) = val.to_str() {
-                return Some(s.to_owned());
-            }
-        }
-    }
-
-    None
 }
 
 #[get("/")]
