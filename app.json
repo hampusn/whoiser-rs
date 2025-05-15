@@ -1,0 +1,17 @@
+{
+  "name": "whoiser",
+  "description": "A simple Rust application which makes a whois lookup on the visitors IP.",
+  "repository": "https://github.com/hampusn/whoiser-rs",
+  "keywords": ["rust", "actix", "whois"],
+  "website": "https://github.com/hampusn/whoiser-rs",
+  "env": {
+    "PORT": {
+      "description": "The port your server should listen to.",
+      "value": "8080"
+    },
+    "CACHE_TTL": {
+      "description": "The cache TTL for your whois lookups. This is to make sure you don't spam the whois servers.",
+      "value": "86400"
+    }
+  }
+}
